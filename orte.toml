@@ -18,3 +18,11 @@ data_url = "https://open-kirrberg.github.io/ort-homburg/"
 repo = "Open-Kirrberg/ort-homburg"
 maintainers = ["huhn511"]
 relict_candidates = true
+
+# Erster Ort nur mit Daten aus Rheinland-Pfalz (GeoBasis RLP, Befliegung 2022; S4). Noch ohne Ortspatin / Ortspate.
+[places.zweibruecken]
+status = "3d"
+data_url = "https://open-kirrberg.github.io/ort-zweibruecken/"
+repo = "Open-Kirrberg/ort-zweibruecken"
+maintainers = ["huhn511"]
+relict_candidates = false
