@@ -1,0 +1,122 @@
+# Baut den Orte-Katalog (catalog.json, zentrale Übersichtsebenen, Rangliste) und veröffentlicht ihn auf GitHub
+# Pages (Settings → Pages → Source: GitHub Actions). Plan „Orte skalieren“ §4.1, §4.3, §6; ADR 0052, 0055.
+#
+# Die landesweiten Produkte (Übersicht aus ≈ 2 800 DGM1-Kacheln, Ranglisten aus DGM1 + DOM1 ≈ 22 GB) passen
+# weder auf einen Runner noch in actions/cache (10 GB, nach 7 Tagen ohne Zugriff gelöscht). Sie werden zentral
+# mit der Explorer-Pipeline gerechnet und als **Daten-Bundle** (Release-Asset dieses Repositorys, SHA-256 in
+# daten.toml) eingespielt. Dieser Workflow lädt also nichts von amtlichen Diensten: er prüft das Bundle,
+# rechnet die Kachel-Zuordnung aus den mitgelieferten VG25-Grenzen nach, baut catalog.json aus orte.toml und
+# veröffentlicht. Ranglisten-Zahlen kommen nur aus dem Bundle (R3), nie aus Ort-Repositories.
+#
+# Auslöser: Änderung an orte.toml, daten.toml oder dieser Datei (Pull Requests: nur bauen und prüfen),
+# von Hand (Run workflow). Nie nach Zeitplan.
+name: Katalog bauen und veröffentlichen
+
+on:
+  push:
+    branches: [main]
+    paths: [orte.toml, daten.toml, .github/workflows/build.yml]
+  pull_request:
+    paths: [orte.toml, daten.toml, .github/workflows/build.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: katalog-pages
+  cancel-in-progress: false
+
+env:
+  EXPLORER_REPO: Open-Kirrberg/saar-lidar-explorer
+  PIPELINE_REF: 0d378d9ce28b1abd3179513265e6fa3ba3d986be
+  PIPELINE_VERSION: "0.9.1"
+  UV_VERSION: "0.12.3"
+  PYTHON_VERSION: "3.12.13"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Katalog-Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: katalog
+          persist-credentials: false
+
+      - name: Explorer-Pipeline (festgelegte Version)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ env.EXPLORER_REPO }}
+          ref: ${{ env.PIPELINE_REF }}
+          path: explorer
+          sparse-checkout: pipeline
+          persist-credentials: false
+
+      - name: uv + Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: explorer/pipeline/uv.lock
+
+      - name: Pipeline installieren, Version prüfen
+        working-directory: explorer/pipeline
+        run: |
+          set -euo pipefail
+          uv sync --frozen
+          v=$(uv run --frozen python -c 'import common; print(common.PIPELINE_VERSION)')
+          [ "$v" = "$PIPELINE_VERSION" ] || { echo "::error::pipeline $v ≠ PIPELINE_VERSION $PIPELINE_VERSION"; exit 1; }
+
+      - name: Daten-Bundle laden (Release-Asset, SHA-256 aus daten.toml)
+        id: bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          read -r tag asset sha < <(python3 -c 'import tomllib; b = tomllib.load(open("katalog/daten.toml", "rb"))["bundle"]; print(b["tag"], b["asset"], b["sha256"])')
+          mkdir -p "$RUNNER_TEMP/bundle"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir "$RUNNER_TEMP/bundle"
+          echo "path=$RUNNER_TEMP/bundle/$asset" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Katalog bauen
+        working-directory: explorer/pipeline
+        env:
+          SLE_UA_CONTEXT: ci ${{ github.repository }}
+        run: |
+          uv run --frozen python katalog.py site --bundle "${{ steps.bundle.outputs.path }}" \
+            --sha256 "${{ steps.bundle.outputs.sha256 }}" --config "$GITHUB_WORKSPACE/katalog/orte.toml" \
+            --out "$RUNNER_TEMP/site" --work "$RUNNER_TEMP/work"
+
+      - name: Katalog prüfen
+        working-directory: explorer/pipeline
+        run: |
+          set -euo pipefail
+          uv run --frozen python katalog.py check --site "$RUNNER_TEMP/site"
+          du -sh "$RUNNER_TEMP/site" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure Pages
+        if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

@@ -1,0 +1,20 @@
+# Orte mit eigenem Repository (Plan „Orte skalieren“, ADR 0052; Vertrag „Catalog (sle-catalog-v1)“).
+# Jede Gemeinde des Saarlands (und die RLP-Nachbarn) steht automatisch im Katalog – ohne Eintrag hier mit
+# Status "stats" („Ortspate gesucht“): nur Übersichtsgelände und Rangliste, keine data_url.
+#
+# Ein Eintrag hier macht aus einer Gemeinde einen 3D-Ort:
+#   status            "3d" (alle eigenen Kacheln veröffentlicht) | "building" (teilweise / im Aufbau) | "stats"
+#   data_url          https-Adresse der Pages-Seite des Ort-Repositorys, mit "/" am Ende
+#   repo              "Open-Kirrberg/ort-<id>"
+#   maintainers       GitHub-Namen der Ortspaten (nur Namen, R7)
+#   relict_candidates Spiegel von ort.toml (ADR 0053), nur informativ
+#
+# Welche Kacheln einem Ort gehören, wird NIE hier eingetragen: das rechnet der Build aus den amtlichen
+# Gemeindegrenzen (BKG VG25, Regel largest-share-v1). Ranglisten-Zahlen ebenso – nie aus Ort-Repositories (R3).
+
+[places.homburg]
+status = "3d"
+data_url = "https://open-kirrberg.github.io/ort-homburg/"
+repo = "Open-Kirrberg/ort-homburg"
+maintainers = ["huhn511"]
+relict_candidates = true

@@ -1,0 +1,9 @@
+# Daten-Bundle des Katalogs (sle-katalog-bundle-v1): die zentral gerechneten landesweiten Produkte.
+# Erzeugt von einer Maintainerin / einem Maintainer mit der Explorer-Pipeline (siehe README „Daten-Bundle erneuern“)
+# und als Release-Asset dieses Repositorys hochgeladen. Der Workflow lädt genau diese Datei und prüft die SHA-256.
+
+[bundle]
+tag = "daten-2026-11-08"
+asset = "sle-katalog-daten-2026-11-08.tar"
+sha256 = "5975695b1646dda88ff291d8c263ed45e93b4051c2192206b3dc77a6c1b1a573"
+pipeline = "0.9.1"
